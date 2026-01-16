@@ -505,7 +505,16 @@ Only return the JSON, nothing else:"""
                                             resolved = True
                                             break
                                         elif agent_name == "CareDesk" and source_field == "OrderID":
-                                            filters["ReferenceID"] = first_row[source_field]
+                                            # Collect all OrderIDs for CareDesk ReferenceID
+                                            reference_ids = []
+                                            for row in source_result["rows"]:
+                                                if source_field in row and row[source_field] is not None:
+                                                    reference_ids.append(row[source_field])
+                                            if reference_ids:
+                                                if len(reference_ids) == 1:
+                                                    filters["ReferenceID"] = reference_ids[0]
+                                                else:
+                                                    filters["ReferenceID"] = reference_ids
                                             resolved = True
                                             break
                 # Handle single dependency in Agent.Field format
@@ -514,19 +523,45 @@ Only return the JSON, nothing else:"""
                     if source_agent in results:
                         source_result = results[source_agent]
                         if "rows" in source_result and source_result["rows"]:
-                            first_row = source_result["rows"][0]
-                            if source_field in first_row:
-                                value = first_row[source_field]
-                                if agent_name == "ShipStream" and source_field == "OrderID":
-                                    filters["OrderID"] = value
-                                elif agent_name == "PayGuard" and source_field == "OrderID":
-                                    filters["OrderID"] = value
-                                elif agent_name == "PayGuard" and source_field == "UserID":
-                                    filters["UserID"] = value
-                                elif agent_name == "CareDesk" and source_field == "UserID":
-                                    filters["UserID"] = value
-                                elif agent_name == "CareDesk" and source_field == "OrderID":
-                                    filters["ReferenceID"] = value
+                            # For OrderID dependencies, collect ALL OrderIDs from multiple rows
+                            if (agent_name == "ShipStream" or agent_name == "PayGuard") and source_field == "OrderID":
+                                # Collect all OrderIDs from all rows
+                                order_ids = []
+                                for row in source_result["rows"]:
+                                    if source_field in row and row[source_field] is not None:
+                                        order_ids.append(row[source_field])
+                                
+                                if order_ids:
+                                    # If multiple OrderIDs, store as list for special handling
+                                    if len(order_ids) == 1:
+                                        filters["OrderID"] = order_ids[0]
+                                    else:
+                                        # Multiple OrderIDs - store as list
+                                        filters["OrderID"] = order_ids
+                            else:
+                                # For other dependencies, check if we need to collect multiple values
+                                if agent_name == "CareDesk" and source_field == "OrderID":
+                                    # Collect all OrderIDs for CareDesk ReferenceID
+                                    reference_ids = []
+                                    for row in source_result["rows"]:
+                                        if source_field in row and row[source_field] is not None:
+                                            reference_ids.append(row[source_field])
+                                    
+                                    if reference_ids:
+                                        if len(reference_ids) == 1:
+                                            filters["ReferenceID"] = reference_ids[0]
+                                        else:
+                                            # Multiple ReferenceIDs - store as list
+                                            filters["ReferenceID"] = reference_ids
+                                else:
+                                    # For other dependencies, use first row (existing behavior)
+                                    first_row = source_result["rows"][0]
+                                    if source_field in first_row:
+                                        value = first_row[source_field]
+                                        if agent_name == "PayGuard" and source_field == "UserID":
+                                            filters["UserID"] = value
+                                        elif agent_name == "CareDesk" and source_field == "UserID":
+                                            filters["UserID"] = value
                         elif "error" in source_result:
                             # If source agent had an error, log it but continue
                             self.logger.logger.warning(f"Source agent {source_agent} had error: {source_result.get('error')}")
@@ -545,6 +580,7 @@ Only return the JSON, nothing else:"""
                     }
                 else:
                     step_start = time.time()
+                    # Agents now handle multiple OrderIDs using IN clause, so normal processing works
                     agent_result = agent.process_task(goal, filters=filters if filters else None)
                     step_time = (time.time() - step_start) * 1000
                     # Ensure agent_result has required fields

@@ -101,7 +101,20 @@ SQL Query:"""
                     # Skip if this column already has a condition
                     if key.upper() in existing_columns:
                         continue
-                    if isinstance(value, str):
+                    # Handle list values (for multiple ReferenceIDs) using IN clause
+                    if isinstance(value, list) and len(value) > 0:
+                        if all(isinstance(v, (int, float)) for v in value):
+                            # Numeric list - use IN clause
+                            value_str = ",".join(str(v) for v in value)
+                            new_where_clauses.append(f"{key} IN ({value_str})")
+                        elif all(isinstance(v, str) for v in value):
+                            # String list - use IN clause with quotes
+                            value_str = ",".join(f"'{v}'" for v in value)
+                            new_where_clauses.append(f"{key} IN ({value_str})")
+                        else:
+                            # Mixed types - use first value as fallback
+                            new_where_clauses.append(f"{key} = {value[0]}")
+                    elif isinstance(value, str):
                         new_where_clauses.append(f"{key} = '{value}'")
                     else:
                         new_where_clauses.append(f"{key} = {value}")
