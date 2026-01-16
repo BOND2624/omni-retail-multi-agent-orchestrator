@@ -53,10 +53,13 @@ Available tables and their columns:
 
 Task: {task}
 
-{f"Additional filters: {filters}" if filters else ""}
+{f"CRITICAL - You MUST use these filters in your WHERE clause: {filters}" if filters else ""}
 
 Generate a SQL SELECT query to answer this task. Only return the SQL query, nothing else.
 - Use ONLY columns that exist in the schema
+- CRITICAL: If task asks about "status" or "shipment status", always include Status column in SELECT (e.g., "SELECT TrackingNumber, Status, EstimatedArrival...")
+- CRITICAL: If task asks about "arrival" or "delivery", always include EstimatedArrival column
+- Include all relevant columns needed to answer the question completely (TrackingNumber, Status, EstimatedArrival)
 - Do not use JOINs unless absolutely necessary
 - Use simple SELECT statements
 - Be specific with WHERE clauses based on the task description

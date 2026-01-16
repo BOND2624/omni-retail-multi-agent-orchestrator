@@ -55,12 +55,14 @@ CRITICAL: Transaction Type values are case-sensitive: "Purchase" and "Refund" (c
 
 Task: {task}
 
-{f"Additional filters: {filters}" if filters else ""}
+{f"CRITICAL - You MUST use these filters in your WHERE clause: {filters}" if filters else ""}
 
 Generate a SQL SELECT query to answer this task. Only return the SQL query, nothing else.
 - Use ONLY columns that exist in the schema
-- For Transaction Type: Use "Refund" (capitalized) not "refund"
-- Do not use JOINs unless absolutely necessary
+- CRITICAL: Transaction Type values are case-sensitive: "Purchase" (for payments/purchases) and "Refund" (for refunds)
+- CRITICAL: If task asks about "payment", "paid", "how I paid", "payment method" → use Type = 'Purchase' (NOT 'Refund')
+- CRITICAL: If task asks about "refund", "refunded", "refund status" → use Type = 'Refund'
+- Do not use JOINs unless absolutely necessary (but PaymentMethods JOIN is OK for payment method info)
 - Use simple SELECT statements
 - Be specific with WHERE clauses based on the task description
 - CRITICAL: Do NOT use parameterized queries (with ? placeholders). Always use direct values in WHERE clauses like: WHERE OrderID = 1, NOT WHERE OrderID = ?
@@ -145,11 +147,24 @@ SQL Query:"""
                 else:
                     raise
             
-            # If no rows found and query mentions refund, try case-insensitive Type matching
-            if not rows and ("refund" in task.lower() or "Type" in sql_query):
-                # Try with capitalized "Refund" or "Purchase"
+            # If no rows found, try to fix Type mismatch
+            if not rows and "Type" in sql_query:
                 import re
-                if re.search(r"Type\s*=\s*['\"]refund['\"]", sql_query, re.IGNORECASE):
+                # Check if task asks about payment/purchase but query uses Refund
+                task_lower = task.lower()
+                is_payment_query = any(word in task_lower for word in ["payment", "paid", "how i paid", "payment method", "how did i pay", "purchase"])
+                is_refund_query = any(word in task_lower for word in ["refund", "refunded", "refund status"])
+                
+                # If task asks about payment but query uses Refund, fix it
+                if is_payment_query and re.search(r"Type\s*=\s*['\"]Refund['\"]", sql_query):
+                    try:
+                        fixed_query = re.sub(r"Type\s*=\s*['\"]Refund['\"]", "Type = 'Purchase'", sql_query)
+                        rows = self.execute_query(fixed_query)
+                        sql_query = fixed_query  # Update the query for logging
+                    except:
+                        pass  # If fix doesn't work, use original empty result
+                # If task asks about refund but query uses wrong case, fix it
+                elif is_refund_query and re.search(r"Type\s*=\s*['\"]refund['\"]", sql_query, re.IGNORECASE):
                     try:
                         fixed_query = re.sub(r"Type\s*=\s*['\"]refund['\"]", "Type = 'Refund'", sql_query, flags=re.IGNORECASE)
                         rows = self.execute_query(fixed_query)

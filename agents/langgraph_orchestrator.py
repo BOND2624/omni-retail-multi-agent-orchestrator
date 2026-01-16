@@ -115,6 +115,7 @@ IMPORTANT:
 - If query mentions "tracking", "shipment", "delivery", "package", "shipping" → include ShipStream
 - If query mentions "ticket", "support", "complaint", "satisfaction", "rating" → include CareDesk
 - If query mentions "order", "product", "user", "premium" → include ShopCore
+- CRITICAL: If query asks about "my tickets", "do I have tickets", "open tickets" (user-specific) AND includes ShopCore → CareDesk should depend on BOTH ShopCore.OrderID AND ShopCore.UserID
 
 Query: "{query}"
 {f"Additional info: {additional_info}" if additional_info else ""}
@@ -479,8 +480,54 @@ Only return the JSON, nothing else:"""
                     filters["Email"] = email
             
             if depends_on:
+                # Handle list of dependencies (e.g., ['ShopCore.OrderID', 'ShopCore.UserID'])
+                if isinstance(depends_on, list):
+                    # Process all dependencies from the same source agent
+                    source_agent = None
+                    source_result = None
+                    reference_ids = []
+                    user_ids = []
+                    
+                    for dep_item in depends_on:
+                        if isinstance(dep_item, str) and "." in dep_item:
+                            agent, field = dep_item.split(".", 1)
+                            if source_agent is None:
+                                source_agent = agent
+                                if source_agent in results:
+                                    source_result = results[source_agent]
+                            
+                            # All dependencies should be from the same source agent
+                            if agent == source_agent and source_result and "rows" in source_result and source_result["rows"]:
+                                # Collect values from all rows for this field
+                                for row in source_result["rows"]:
+                                    if field in row and row[field] is not None:
+                                        if field == "OrderID":
+                                            if row[field] not in reference_ids:
+                                                reference_ids.append(row[field])
+                                        elif field == "UserID":
+                                            if row[field] not in user_ids:
+                                                user_ids.append(row[field])
+                    
+                    # Apply collected values to filters
+                    if reference_ids:
+                        if agent_name == "CareDesk":
+                            if len(reference_ids) == 1:
+                                filters["ReferenceID"] = reference_ids[0]
+                            else:
+                                filters["ReferenceID"] = reference_ids
+                        elif agent_name in ["ShipStream", "PayGuard"]:
+                            if len(reference_ids) == 1:
+                                filters["OrderID"] = reference_ids[0]
+                            else:
+                                filters["OrderID"] = reference_ids
+                    
+                    if user_ids and len(set(user_ids)) == 1:
+                        if agent_name == "CareDesk":
+                            filters["UserID"] = user_ids[0]
+                        elif agent_name == "PayGuard":
+                            filters["UserID"] = user_ids[0]
                 # Handle multiple dependencies with "or"
-                if " or " in depends_on:
+                elif isinstance(depends_on, str) and " or " in depends_on:
                     # Try each dependency until one works
                     dependencies = [d.strip() for d in depends_on.split(" or ")]
                     resolved = False
@@ -543,9 +590,13 @@ Only return the JSON, nothing else:"""
                                 if agent_name == "CareDesk" and source_field == "OrderID":
                                     # Collect all OrderIDs for CareDesk ReferenceID
                                     reference_ids = []
+                                    user_ids = []
                                     for row in source_result["rows"]:
                                         if source_field in row and row[source_field] is not None:
                                             reference_ids.append(row[source_field])
+                                        # Also collect UserID if available (needed for user-specific queries)
+                                        if "UserID" in row and row["UserID"] is not None:
+                                            user_ids.append(row["UserID"])
                                     
                                     if reference_ids:
                                         if len(reference_ids) == 1:
@@ -553,6 +604,10 @@ Only return the JSON, nothing else:"""
                                         else:
                                             # Multiple ReferenceIDs - store as list
                                             filters["ReferenceID"] = reference_ids
+                                    
+                                    # Also add UserID if available (for queries like "open tickets")
+                                    if user_ids and len(set(user_ids)) == 1:
+                                        filters["UserID"] = user_ids[0]
                                 else:
                                     # For other dependencies, use first row (existing behavior)
                                     first_row = source_result["rows"][0]

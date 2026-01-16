@@ -55,13 +55,20 @@ CRITICAL: Ticket Status values are case-sensitive and capitalized: "Open" and "C
 
 Task: {task}
 
-{f"Additional filters: {filters}" if filters else ""}
+{f"CRITICAL - You MUST use these filters in your WHERE clause: {filters}" if filters else ""}
 
 Generate a SQL SELECT query to answer this task. Only return the SQL query, nothing else.
 - Use ONLY columns that exist in the schema
-- Do not use JOINs unless absolutely necessary
+- CRITICAL: If filters include UserID, ALWAYS use it in WHERE clause: WHERE UserID = X (not just ReferenceID)
+- CRITICAL: If task asks for "open tickets", "open support tickets", "any open tickets" → use: WHERE Status = 'Open' (capitalized)
+- CRITICAL: If task asks for "closed tickets" → use: WHERE Status = 'Closed' (capitalized)
+- CRITICAL: When querying for a specific user's tickets (e.g., "my tickets", "do I have tickets"), use UserID filter, not just ReferenceID
+- CRITICAL: If both UserID and ReferenceID filters are provided, use BOTH in WHERE clause: WHERE UserID = X AND ReferenceID = Y
+- CRITICAL: ReferenceID is an INTEGER column - use ReferenceID = 1 (not ReferenceID = '1')
+- Do not use JOINs unless absolutely necessary (but SatisfactionSurveys JOIN is OK for satisfaction ratings)
 - Use simple SELECT statements
 - Be specific with WHERE clauses based on the task description
+- Always apply ALL provided filters (UserID, ReferenceID, Status) in WHERE clause
 
 SQL Query:"""
             
@@ -77,6 +84,22 @@ SQL Query:"""
             
             # Remove trailing semicolon if present
             sql_query = sql_query.rstrip().rstrip(';').strip()
+            
+            # Fix ReferenceID type: convert string ReferenceID to integer (e.g., ReferenceID = '1' → ReferenceID = 1)
+            import re
+            # Pattern to match ReferenceID = 'number' or ReferenceID = "number"
+            pattern = r"ReferenceID\s*=\s*['\"](\d+)['\"]"
+            sql_query = re.sub(pattern, r"ReferenceID = \1", sql_query, flags=re.IGNORECASE)
+            
+            # Validate query: reject parameterized queries (with ? placeholders)
+            if "?" in sql_query:
+                execution_time = (time.time() - start_time) * 1000
+                return self.format_error(f"Invalid SQL query: Parameterized queries (with ?) are not supported. Please use direct values in WHERE clauses.")
+            
+            # Check if task asks for "open" tickets and add Status filter if not present
+            task_lower = task.lower()
+            is_open_tickets_query = any(phrase in task_lower for phrase in ["open tickets", "open support tickets", "any open tickets", "do i have open", "have any open"])
+            is_closed_tickets_query = any(phrase in task_lower for phrase in ["closed tickets", "closed support tickets"])
             
             # Apply filters if provided
             if filters:
@@ -115,9 +138,19 @@ SQL Query:"""
                             # Mixed types - use first value as fallback
                             new_where_clauses.append(f"{key} = {value[0]}")
                     elif isinstance(value, str):
-                        new_where_clauses.append(f"{key} = '{value}'")
+                        # For ReferenceID, try to convert to int if it's numeric (to match database type)
+                        if key == "ReferenceID" and value.isdigit():
+                            new_where_clauses.append(f"{key} = {int(value)}")
+                        else:
+                            new_where_clauses.append(f"{key} = '{value}'")
                     else:
                         new_where_clauses.append(f"{key} = {value}")
+                
+                # Add Status filter if task asks for open/closed tickets and Status is not already in query
+                if is_open_tickets_query and "STATUS" not in existing_columns and "Status" not in filters:
+                    new_where_clauses.append("Status = 'Open'")
+                elif is_closed_tickets_query and "STATUS" not in existing_columns and "Status" not in filters:
+                    new_where_clauses.append("Status = 'Closed'")
                 
                 # Add new filters if any
                 if new_where_clauses:
@@ -125,6 +158,16 @@ SQL Query:"""
                         sql_query += " AND " + " AND ".join(new_where_clauses)
                     else:
                         sql_query += " WHERE " + " AND ".join(new_where_clauses)
+            elif is_open_tickets_query or is_closed_tickets_query:
+                # No filters provided, but task asks for open/closed tickets - add Status filter
+                import re
+                query_upper = sql_query.upper()
+                has_where = "WHERE" in query_upper
+                status_filter = "Status = 'Open'" if is_open_tickets_query else "Status = 'Closed'"
+                if has_where:
+                    sql_query += f" AND {status_filter}"
+                else:
+                    sql_query += f" WHERE {status_filter}"
             
             # Execute query with error handling
             try:

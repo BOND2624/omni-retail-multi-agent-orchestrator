@@ -62,18 +62,20 @@ Available tables and their exact columns:
 
 Task: {task}
 
-{f"Additional filters: {filters}" if filters else ""}
+{f"CRITICAL - You MUST use these filters in your WHERE clause: {filters}" if filters else ""}
 
 Generate a SQL SELECT query to answer this task. Only return the SQL query, nothing else.
 - Use ONLY the columns listed above
 - For Orders table: Use "Status" column, NEVER "Tracking"
 - For "last order" queries: Query Orders table, NOT Products table
+- CRITICAL: When querying Orders, always include UserID in SELECT if other agents depend on it (e.g., "SELECT OrderID, Status, UserID FROM Orders...")
 - Do not use JOINs unless absolutely necessary
 - Use simple SELECT statements
 - Be specific with WHERE clauses based on the task description
 - IMPORTANT: If task asks to "find user with email X", use: SELECT UserID FROM Users WHERE Email = 'X'
 - NEVER use UserID in WHERE clause when searching by email - use Email column instead
 - NEVER use parameterized queries (?) - always use direct values
+- Include all relevant columns needed to answer the question completely
 
 SQL Query:"""
             

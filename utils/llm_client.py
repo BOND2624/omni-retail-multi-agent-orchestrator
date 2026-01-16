@@ -13,12 +13,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # OpenRouter models with fallback (without openrouter/ prefix)
+# Original free models with :free suffix
 LT_MODELS = [
-    'xiaomi/mimo-v2-flash',  # Primary fallback
-    'mistralai/devstral-2512',
-    'tngtech/deepseek-r1t2-chimera',
-    'tngtech/deepseek-r1t-chimera',
-    'deepseek/deepseek-r1-0528'
+    'xiaomi/mimo-v2-flash:free',  # Primary fallback
+    'mistralai/devstral-2512:free',
+    'tngtech/deepseek-r1t2-chimera:free',
+    'tngtech/deepseek-r1t-chimera:free',
+    'deepseek/deepseek-r1-0528:free'
 ]
 
 
@@ -78,7 +79,8 @@ class OpenRouterLLM:
                             "content": prompt
                         }
                     ],
-                    "temperature": self.temperature
+                    "temperature": self.temperature,
+                    "max_tokens": 512  # Limit tokens to reduce cost and avoid credit issues
                 }
                 
                 response = requests.post(
