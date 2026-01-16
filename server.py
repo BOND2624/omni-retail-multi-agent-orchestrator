@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
 
 # Add project root to path
@@ -209,21 +209,30 @@ def process_query_in_thread(query: str, connection_id: int, websocket: WebSocket
         ).result()
 
 
-@app.get("/", response_class=HTMLResponse)
-async def get_ui():
+@app.get("/")
+async def root():
     """Serve the main UI page."""
     html_file = static_dir / "index.html"
     if html_file.exists():
-        return html_file.read_text(encoding="utf-8")
+        return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
     else:
-        return """
+        return HTMLResponse(content="""
         <html>
             <head><title>Omni-Retail Orchestrator</title></head>
             <body>
                 <h1>UI not found. Please create static/index.html</h1>
             </body>
         </html>
-        """
+        """)
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for Render and monitoring."""
+    return JSONResponse(content={
+        "status": "ok",
+        "service": "omni-retail-orchestrator",
+        "orchestrator_initialized": orchestrator is not None
+    })
 
 
 @app.websocket("/ws")
