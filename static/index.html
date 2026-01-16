@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omni-Retail Multi-Agent Orchestrator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .chat-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .status-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .status-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .chat-messages {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            height: 500px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 2px solid #e9ecef;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: 20%;
+            text-align: right;
+        }
+
+        .message.assistant {
+            background: white;
+            color: #333;
+            margin-right: 20%;
+            border: 1px solid #e9ecef;
+        }
+        
+        .message.assistant code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .message.assistant strong {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .message.assistant ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .message.assistant li {
+            margin: 5px 0;
+        }
+
+        .message.status {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+
+        .message.system {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+            font-size: 0.9em;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .input-area input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-area button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .input-area button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .input-area button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .user-input-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s;
+        }
+
+        .user-input-modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 35px;
+            border-radius: 20px;
+            max-width: 550px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .modal-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .modal-title {
+            flex: 1;
+        }
+
+        .modal-title h3 {
+            color: #667eea;
+            margin: 0 0 5px 0;
+            font-size: 1.4em;
+        }
+
+        .modal-title .field-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #f0f4ff;
+            color: #667eea;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .modal-question {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            margin-bottom: 20px;
+            font-size: 1.05em;
+            color: #333;
+            line-height: 1.5;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1.1em;
+            margin-bottom: 20px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            box-sizing: border-box;
+        }
+
+        .modal-content input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .modal-content .input-hint {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: -15px;
+            margin-bottom: 15px;
+            padding-left: 5px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-content button {
+            flex: 1;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .modal-content button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .modal-content button:active {
+            transform: translateY(0);
+        }
+
+        .status-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+        }
+
+        .status-item strong {
+            color: #667eea;
+        }
+
+        .connection-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .connection-status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .connection-status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .agent-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin: 2px;
+        }
+
+        .badge-shopcore { background: #667eea; color: white; }
+        .badge-shipstream { background: #48bb78; color: white; }
+        .badge-payguard { background: #ed8936; color: white; }
+        .badge-caredesk { background: #9f7aea; color: white; }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Omni-Retail Multi-Agent Orchestrator</h1>
+            <p>Intelligent Multi-Database Query System</p>
+        </div>
+
+        <div class="main-content">
+            <div class="chat-section">
+                <div class="connection-status disconnected" id="connectionStatus">
+                    Disconnected
+                </div>
+
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message system">
+                        Welcome! Ask me anything about orders, shipments, payments, or support tickets.
+                    </div>
+                </div>
+
+                <div class="input-area">
+                    <input type="text" id="queryInput" placeholder="Ask a question..." 
+                           onkeypress="if(event.key === 'Enter') sendQuery()">
+                    <button id="sendButton" onclick="sendQuery()">Send</button>
+                </div>
+            </div>
+
+            <div class="status-section">
+                <h2>Execution Status</h2>
+                <div id="statusContent">
+                    <div class="status-item">
+                        <strong>Status:</strong> <span id="currentStatus">Ready</span>
+                    </div>
+                    <div class="status-item">
+                        <strong>Agents Used:</strong> <span id="agentsUsed">-</span>
+                    </div>
+                    <div class="status-item">
+                        <strong>Execution Time:</strong> <span id="executionTime">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="user-input-modal" id="userInputModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-icon">📝</div>
+                <div class="modal-title">
+                    <h3>Information Required</h3>
+                    <span class="field-badge" id="modalFieldBadge">OrderID</span>
+                </div>
+            </div>
+            <div class="modal-question" id="modalQuestion">
+                Please provide the required information.
+            </div>
+            <input type="text" id="modalInput" placeholder="Enter value..." 
+                   onkeypress="if(event.key === 'Enter') submitUserInput()"
+                   autocomplete="off">
+            <div class="input-hint" id="modalHint"></div>
+            <div class="modal-actions">
+                <button onclick="submitUserInput()">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentUserInputCallback = null;
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                updateConnectionStatus(true);
+                addMessage('system', 'Connected to orchestrator');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+
+            ws.onclose = () => {
+                updateConnectionStatus(false);
+                addMessage('system', 'Disconnected. Reconnecting...');
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addMessage('error', 'Connection error occurred');
+            };
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'connection-status connected';
+            } else {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'connection-status disconnected';
+            }
+        }
+
+        function handleMessage(data) {
+            switch(data.type) {
+                case 'status':
+                    addMessage('status', data.message);
+                    updateStatus('currentStatus', data.message);
+                    break;
+                
+                case 'parsed_query':
+                    const agents = data.data?.agents || [];
+                    updateStatus('agentsUsed', agents.map(a => 
+                        `<span class="agent-badge badge-${a.toLowerCase()}">${a}</span>`
+                    ).join('') || '-');
+                    addMessage('system', `Identified agents: ${agents.join(', ')}`);
+                    break;
+                
+                case 'execution_plan':
+                    addMessage('system', `Execution plan created: ${data.plan.length} steps`);
+                    break;
+                
+                case 'agent_result':
+                    const agent = data.agent;
+                    const rows = data.row_count;
+                    const time = data.execution_time_ms?.toFixed(2) || 'N/A';
+                    if (data.error) {
+                        addMessage('error', `[${agent}] Error: ${data.error}`);
+                    } else {
+                        addMessage('system', `[${agent}] Found ${rows} result(s) in ${time}ms`);
+                    }
+                    break;
+                
+                case 'final_response':
+                    addMessage('assistant', data.response);
+                    updateStatus('executionTime', `${(data.total_time_ms / 1000).toFixed(2)}s`);
+                    updateStatus('currentStatus', 'Complete');
+                    document.getElementById('sendButton').disabled = false;
+                    break;
+                
+                case 'user_input_required':
+                    console.log('User input required - Full data:', JSON.stringify(data, null, 2));
+                    console.log('Prompt value:', data.prompt);
+                    console.log('Field value:', data.field);
+                    
+                    // Extract field from prompt if not provided
+                    let field = data.field || 'unknown';
+                    if (field === 'unknown' || !field) {
+                        // Try to detect from prompt - be more thorough
+                        const promptLower = (data.prompt || '').toLowerCase();
+                        if (promptLower.includes('order id') || promptLower.includes('orderid') || 
+                            promptLower.includes('order') && (promptLower.includes('provide') || promptLower.includes('enter'))) {
+                            field = 'OrderID';
+                        } else if (promptLower.includes('email') || promptLower.includes('e-mail')) {
+                            field = 'Email';
+                        }
+                    }
+                    
+                    // Ensure prompt exists
+                    const prompt = data.prompt || 'Please provide the required information.';
+                    console.log('Calling showUserInputModal with prompt:', prompt, 'field:', field);
+                    showUserInputModal(prompt, field);
+                    break;
+                
+                case 'error':
+                    addMessage('error', data.message);
+                    document.getElementById('sendButton').disabled = false;
+                    break;
+                
+                case 'pong':
+                    // Keep-alive response
+                    break;
+            }
+        }
+
+        function addMessage(type, content) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            // Render markdown for assistant messages
+            if (type === 'assistant' || type === 'system') {
+                messageDiv.innerHTML = renderMarkdown(content);
+            } else {
+                messageDiv.textContent = content;
+            }
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function renderMarkdown(text) {
+            if (!text) return '';
+            
+            // Escape HTML first
+            let html = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            
+            // Bold: **text** - must be processed before other formatting
+            // Use non-greedy matching to handle multiple bold sections
+            html = html.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+            
+            // Bold: __text__
+            html = html.replace(/__([^_]+?)__/g, '<strong>$1</strong>');
+            
+            // Italic: *text* (only if not part of bold)
+            html = html.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+            
+            // Italic: _text_ (only if not part of bold)
+            html = html.replace(/(?<!_)_([^_]+?)_(?!_)/g, '<em>$1</em>');
+            
+            // Code: `code`
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+            
+            // Line breaks
+            html = html.replace(/\n/g, '<br>');
+            
+            // Lists: - item or * item
+            html = html.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
+            html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+            
+            return html;
+        }
+
+        function updateStatus(id, content) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.innerHTML = content;
+            }
+        }
+
+        function sendQuery() {
+            const input = document.getElementById('queryInput');
+            const query = input.value.trim();
+            
+            if (!query || !ws || ws.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            addMessage('user', query);
+            input.value = '';
+            document.getElementById('sendButton').disabled = true;
+            updateStatus('currentStatus', 'Processing...');
+            updateStatus('agentsUsed', '-');
+            updateStatus('executionTime', '-');
+
+            ws.send(JSON.stringify({
+                type: 'query',
+                query: query
+            }));
+        }
+
+        function showUserInputModal(prompt, field) {
+            console.log('Showing input modal:', prompt, field);
+            const modal = document.getElementById('userInputModal');
+            const questionEl = document.getElementById('modalQuestion');
+            const fieldBadgeEl = document.getElementById('modalFieldBadge');
+            const inputEl = document.getElementById('modalInput');
+            const hintEl = document.getElementById('modalHint');
+            
+            // Debug: Check if elements exist
+            if (!questionEl) {
+                console.error('modalQuestion element not found!');
+                return;
+            }
+            if (!prompt || prompt.trim() === '') {
+                console.warn('Empty prompt received:', prompt);
+            }
+            
+            // Set question - ensure it's visible
+            questionEl.textContent = prompt || 'Please provide the required information.';
+            questionEl.style.display = 'block';
+            console.log('Question set to:', questionEl.textContent);
+            
+            // Set field badge
+            const fieldName = field === 'OrderID' ? 'Order ID' : 
+                             field === 'Email' ? 'Email Address' : 
+                             field || 'Information';
+            fieldBadgeEl.textContent = fieldName;
+            
+            // Configure input based on field type
+            inputEl.value = '';
+            if (field === 'Email' || field === 'email') {
+                inputEl.type = 'email';
+                inputEl.placeholder = 'example@email.com';
+                hintEl.textContent = 'Please enter a valid email address';
+            } else if (field === 'OrderID' || field === 'order_id') {
+                inputEl.type = 'text';
+                inputEl.placeholder = 'e.g., 12345';
+                hintEl.textContent = 'Please enter your Order ID (numbers only)';
+            } else {
+                inputEl.type = 'text';
+                inputEl.placeholder = 'Enter value...';
+                hintEl.textContent = '';
+            }
+            
+            modal.classList.add('active');
+            setTimeout(() => inputEl.focus(), 100);
+            
+            currentUserInputCallback = () => {
+                const value = inputEl.value.trim();
+                if (value && ws && ws.readyState === WebSocket.OPEN) {
+                    console.log('Sending user input:', value);
+                    ws.send(JSON.stringify({
+                        type: 'user_input',
+                        value: value
+                    }));
+                    modal.classList.remove('active');
+                    // Don't show "unknown" or "Information" - just show the value
+                    const displayText = (fieldName === 'Information' || fieldName === 'unknown') 
+                        ? `[Provided] ${value}` 
+                        : `[Provided ${fieldName}] ${value}`;
+                    addMessage('user', displayText);
+                    currentUserInputCallback = null;
+                } else {
+                    console.error('Cannot send input - WebSocket not ready');
+                    if (!value) {
+                        alert('Please enter a value');
+                    }
+                }
+            };
+        }
+
+        function submitUserInput() {
+            console.log('Submit user input called');
+            if (currentUserInputCallback) {
+                currentUserInputCallback();
+            } else {
+                console.error('No callback set for user input');
+            }
+        }
+
+        // Initialize on page load
+        connectWebSocket();
+
+        // Keep connection alive
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 30000);
+    </script>
+</body>
+</html>
