@@ -5,6 +5,7 @@ Provides real-time UI integration via WebSocket.
 
 import asyncio
 import json
+import os
 import sys
 import queue
 import threading
@@ -288,5 +289,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Warning: {e}")
     
-    # Run server
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    # Run server - use PORT from environment (Render sets this automatically)
+    port = int(os.getenv("PORT", 8000))
+    print(f"Starting server on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
